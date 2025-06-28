@@ -1,0 +1,279 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String     @id @default(cuid())
+  email       String     @unique
+  phone       String?
+  name        String
+  password    String
+  role        Role       @default(WORKER)
+  status      UserStatus @default(WORKING)
+  expertise   Json?      // Professional skills and pricing
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  deletedAt   DateTime?  // Soft delete
+  
+  // Relations
+  assignments WorkerAssignment[]
+  schedules   WorkSchedule[]
+  landServices LandService[]
+  
+  @@map("users")
+}
+
+model Zone {
+  id          String     @id @default(cuid())
+  name        String     // A, B, C, D
+  color       String     // Hex color for map display
+  address     String?
+  coordinates Json?      // GPS coordinates
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  // Relations
+  landPlots   LandPlot[]
+  
+  @@map("zones")
+}
+
+model LandPlot {
+  id              String        @id @default(cuid())
+  name            String
+  soilType        String
+  area            Float         // Square meters
+  coordinates     Json?         // GPS coordinates
+  status          LandStatus    @default(EMPTY)
+  notes           String?
+  lastSeasonCrop  String?       // Previous crop history
+  imageUrl        String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Foreign Keys
+  zoneId          String
+  zone            Zone          @relation(fields: [zoneId], references: [id])
+  
+  // Relations
+  crops           CropPlanting[]
+  services        LandService[]
+  schedules       PlantingSchedule[]
+  assignments     WorkerAssignment[]
+  
+  @@map("land_plots")
+}
+
+model Crop {
+  id                    String       @id @default(cuid())
+  name                  String
+  category              CropCategory
+  varietyCount          Int          @default(1)
+  daysToHarvest         Int          // Days from germination to harvest
+  suggestedPlantingTime Json?        // Seasonal recommendations
+  expectedYield         Float?       // Expected yield per sq meter
+  status                CropStatus   @default(ACTIVE)
+  careHistory           Json?        // Previous season care history
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  
+  // Relations
+  plantings             CropPlanting[]
+  
+  @@map("crops")
+}
+
+model CropPlanting {
+  id           String         @id @default(cuid())
+  plantingDate DateTime
+  harvestDate  DateTime?
+  actualYield  Float?
+  status       PlantingStatus @default(PLANNED)
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  
+  // Foreign Keys
+  cropId       String
+  landPlotId   String
+  
+  // Relations
+  crop         Crop           @relation(fields: [cropId], references: [id])
+  landPlot     LandPlot       @relation(fields: [landPlotId], references: [id])
+  
+  @@map("crop_plantings")
+}
+
+model Service {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  name        String
+  costPerSqm  Float     // Cost per square meter
+  duration    Int       // Duration in hours
+  status      ServiceStatus @default(ACTIVE)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Relations
+  landServices LandService[]
+  
+  @@map("services")
+}
+
+model LandService {
+  id          String        @id @default(cuid())
+  scheduledAt DateTime
+  completedAt DateTime?
+  duration    Int           // Actual duration in hours
+  cost        Float
+  status      ServiceStatus @default(PENDING)
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Foreign Keys
+  serviceId   String
+  landPlotId  String
+  workerId    String?
+  
+  // Relations
+  service     Service       @relation(fields: [serviceId], references: [id])
+  landPlot    LandPlot      @relation(fields: [landPlotId], references: [id])
+  worker      User?         @relation(fields: [workerId], references: [id])
+  
+  @@map("land_services")
+}
+
+model PlantingSchedule {
+  id            String          @id @default(cuid())
+  season        String          // "2024-Q1", "2024-Q2", etc.
+  status        ScheduleStatus  @default(LOCKED)
+  cropType      String?
+  plannedServices Json?         // Array of planned services
+  lockedUntil   DateTime?       // Lock release date (30 days before season)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  
+  // Foreign Keys
+  landPlotId    String
+  
+  // Relations
+  landPlot      LandPlot        @relation(fields: [landPlotId], references: [id])
+  
+  @@map("planting_schedules")
+}
+
+model WorkerAssignment {
+  id          String    @id @default(cuid())
+  workDate    DateTime
+  startTime   DateTime
+  endTime     DateTime
+  hourlyRate  Float
+  task        String
+  status      WorkStatus @default(ASSIGNED)
+  landArea    Float
+  cropType    String?
+  paymentStatus PaymentStatus @default(PENDING)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Foreign Keys
+  workerId    String
+  landPlotId  String
+  
+  // Relations
+  worker      User      @relation(fields: [workerId], references: [id])
+  landPlot    LandPlot  @relation(fields: [landPlotId], references: [id])
+  
+  @@map("worker_assignments")
+}
+
+model WorkSchedule {
+  id          String    @id @default(cuid())
+  workDate    DateTime
+  tasks       Json      // Array of tasks for the day
+  totalHours  Float
+  totalPay    Float
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Foreign Keys
+  workerId    String
+  
+  // Relations
+  worker      User      @relation(fields: [workerId], references: [id])
+  
+  @@map("work_schedules")
+}
+
+// Enums
+enum Role {
+  FARM_OWNER
+  WORKER
+}
+
+enum UserStatus {
+  WORKING
+  RESTING
+  OTHER
+}
+
+enum LandStatus {
+  EMPTY
+  IN_USE
+  RENOVATING
+  LOCKED
+}
+
+enum CropCategory {
+  FRUIT
+  VEGETABLE
+  ROOT_VEGETABLE
+  HERB_SPICE
+}
+
+enum CropStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum PlantingStatus {
+  PLANNED
+  PLANTED
+  GROWING
+  HARVESTED
+}
+
+enum ServiceStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum ScheduleStatus {
+  LOCKED
+  OPEN
+}
+
+enum WorkStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+} 
