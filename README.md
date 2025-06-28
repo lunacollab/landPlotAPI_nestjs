@@ -236,16 +236,7 @@ Sau khi chạy `npm run test:cov`, xem báo cáo coverage tại:
 coverage/lcov-report/index.html
 ```
 
-## 🚀 Deployment
 
-### Docker (Recommended)
-```bash
-# Build image
-docker build -t farm-management-api .
-
-# Run container
-docker run -p 3000:3000 farm-management-api
-```
 
 ### Manual Deployment
 ```bash
