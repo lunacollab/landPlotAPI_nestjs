@@ -13,6 +13,21 @@ describe('Configuration', () => {
   });
 
   it('should return default configuration when no environment variables are set', () => {
+    // Clear specific environment variables for this test
+    delete process.env.PORT;
+    delete process.env.DATABASE_URL;
+    delete process.env.JWT_SECRET;
+    delete process.env.JWT_EXPIRES_IN;
+    delete process.env.JWT_REFRESH_SECRET;
+    delete process.env.JWT_REFRESH_EXPIRES_IN;
+    delete process.env.SMTP_HOST;
+    delete process.env.SMTP_PORT;
+    delete process.env.SMTP_USER;
+    delete process.env.SMTP_PASS;
+    delete process.env.MAX_FILE_SIZE;
+    delete process.env.UPLOAD_PATH;
+    delete process.env.NODE_ENV;
+
     const config = configuration();
 
     expect(config.port).toBe(3000);
