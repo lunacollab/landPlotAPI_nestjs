@@ -1,7 +1,7 @@
 export default () => ({
-  port: process.env.PORT || 3000,
+  port: parseInt(process.env.PORT || '3000'),
   database: {
-    url: process.env.DATABASE_URL,
+    url: process.env.DATABASE_URL || undefined,
   },
   jwt: {
     secret: process.env.JWT_SECRET,
@@ -11,12 +11,12 @@ export default () => ({
   },
   email: {
     host: process.env.SMTP_HOST,
-    port: process.env.SMTP_PORT || 587,
+    port: parseInt(process.env.SMTP_PORT || '587'),
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
   upload: {
-    maxFileSize: process.env.MAX_FILE_SIZE || 5242880,
+    maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '5242880'),
     uploadPath: process.env.UPLOAD_PATH || './uploads',
   },
   app: {

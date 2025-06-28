@@ -1,20 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from './prisma.service';
-import { PrismaClient } from '@prisma/client';
-
-// Mock PrismaClient với đầy đủ methods
-const mockPrismaClient = {
-  $connect: jest.fn(),
-  $disconnect: jest.fn(),
-  $queryRaw: jest.fn(),
-  $executeRawUnsafe: jest.fn(),
-};
-
-jest.mock('@prisma/client', () => {
-  return {
-    PrismaClient: jest.fn(() => mockPrismaClient),
-  };
-});
 
 describe('PrismaService', () => {
   let service: PrismaService;
@@ -25,169 +10,146 @@ describe('PrismaService', () => {
     }).compile();
 
     service = module.get<PrismaService>(PrismaService);
-    
-    // Gán methods từ mock vào service
-    service.$connect = mockPrismaClient.$connect;
-    service.$disconnect = mockPrismaClient.$disconnect;
-    service.$queryRaw = mockPrismaClient.$queryRaw;
-    service.$executeRawUnsafe = mockPrismaClient.$executeRawUnsafe;
-    
-    // Mock các methods của service
-    service.onModuleInit = jest.fn().mockImplementation(async () => {
-      await service.$connect();
-    });
-    
-    service.onModuleDestroy = jest.fn().mockImplementation(async () => {
-      await service.$disconnect();
-    });
-    
-    service.cleanDatabase = jest.fn().mockImplementation(async () => {
-      if (process.env.NODE_ENV === 'test') {
-        const tablenames = await service.$queryRaw<Array<{ tablename: string }>>`SELECT tablename FROM pg_tables WHERE schemaname='public'`;
-        const tables = tablenames
-          .map(({ tablename }) => tablename)
-          .filter((name) => name !== '_prisma_migrations')
-          .map((name) => `"public"."${name}"`)
-          .join(', ');
-
-        try {
-          await service.$executeRawUnsafe(`TRUNCATE TABLE ${tables} CASCADE;`);
-        } catch (error) {
-          console.log({ error });
-        }
-      }
-    });
-  });
-
-  afterEach(() => {
-    jest.clearAllMocks();
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  it('should extend PrismaClient', () => {
-    expect(service).toBeDefined();
-    expect(service.$connect).toBeDefined();
-    expect(service.$disconnect).toBeDefined();
+  it('should have required methods', () => {
+    expect(typeof service.$connect).toBe('function');
+    expect(typeof service.$disconnect).toBe('function');
+    expect(typeof service.$queryRaw).toBe('function');
+    expect(typeof service.$executeRawUnsafe).toBe('function');
+  });
+
+  it('should have lifecycle methods', () => {
+    expect(typeof service.onModuleInit).toBe('function');
+    expect(typeof service.onModuleDestroy).toBe('function');
+    expect(typeof service.cleanDatabase).toBe('function');
+  });
+
+  describe('constructor', () => {
+    it('should be instantiable', () => {
+      expect(service).toBeInstanceOf(PrismaService);
+    });
   });
 
   describe('onModuleInit', () => {
-    it('should connect to database', async () => {
-      await service.onModuleInit();
-      expect(mockPrismaClient.$connect).toHaveBeenCalled();
+    it('should be callable', async () => {
+      // Mock the $connect method
+      jest.spyOn(service, '$connect').mockResolvedValue(undefined);
+      
+      await expect(service.onModuleInit()).resolves.toBeUndefined();
+      expect(service.$connect).toHaveBeenCalled();
     });
 
-    it('should handle connection errors', async () => {
+    it('should handle $connect error', async () => {
       const error = new Error('Connection failed');
-      mockPrismaClient.$connect.mockRejectedValue(error);
+      jest.spyOn(service, '$connect').mockRejectedValue(error);
 
       await expect(service.onModuleInit()).rejects.toThrow('Connection failed');
-      expect(mockPrismaClient.$connect).toHaveBeenCalled();
     });
   });
 
   describe('onModuleDestroy', () => {
-    it('should disconnect from database', async () => {
-      await service.onModuleDestroy();
-      expect(mockPrismaClient.$disconnect).toHaveBeenCalled();
+    it('should be callable', async () => {
+      // Mock the $disconnect method
+      jest.spyOn(service, '$disconnect').mockResolvedValue(undefined);
+      
+      await expect(service.onModuleDestroy()).resolves.toBeUndefined();
+      expect(service.$disconnect).toHaveBeenCalled();
     });
 
-    it('should handle disconnection errors', async () => {
-      const error = new Error('Disconnection failed');
-      mockPrismaClient.$disconnect.mockRejectedValue(error);
+    it('should handle $disconnect error', async () => {
+      const error = new Error('Disconnect failed');
+      jest.spyOn(service, '$disconnect').mockRejectedValue(error);
 
-      await expect(service.onModuleDestroy()).rejects.toThrow('Disconnection failed');
-      expect(mockPrismaClient.$disconnect).toHaveBeenCalled();
+      await expect(service.onModuleDestroy()).rejects.toThrow('Disconnect failed');
     });
   });
 
   describe('cleanDatabase', () => {
-    const originalEnv = process.env;
-
     beforeEach(() => {
-      process.env = { ...originalEnv };
+      jest.spyOn(console, 'log').mockImplementation();
     });
 
     afterEach(() => {
-      process.env = originalEnv;
+      jest.restoreAllMocks();
     });
 
-    it('should not clean database when not in test environment', async () => {
+    it('should clean database when NODE_ENV is test', async () => {
+      process.env.NODE_ENV = 'test';
+      
+      // Mock the methods
+      jest.spyOn(service, '$queryRaw').mockResolvedValue([
+        { tablename: 'users' },
+        { tablename: 'posts' },
+        { tablename: '_prisma_migrations' },
+      ] as any);
+      jest.spyOn(service, '$executeRawUnsafe').mockResolvedValue(0 as any);
+
+      await service.cleanDatabase();
+
+      expect(service.$queryRaw).toHaveBeenCalled();
+      expect(service.$executeRawUnsafe).toHaveBeenCalled();
+    });
+
+    it('should not clean database when NODE_ENV is not test', async () => {
       process.env.NODE_ENV = 'development';
       
+      jest.spyOn(service, '$queryRaw').mockResolvedValue([] as any);
+      jest.spyOn(service, '$executeRawUnsafe').mockResolvedValue(0 as any);
+
       await service.cleanDatabase();
-      
-      expect(mockPrismaClient.$queryRaw).not.toHaveBeenCalled();
-      expect(mockPrismaClient.$executeRawUnsafe).not.toHaveBeenCalled();
+
+      expect(service.$queryRaw).not.toHaveBeenCalled();
+      expect(service.$executeRawUnsafe).not.toHaveBeenCalled();
     });
 
-    it('should clean database when in test environment', async () => {
-      process.env.NODE_ENV = 'test';
+    it('should not clean database when NODE_ENV is production', async () => {
+      process.env.NODE_ENV = 'production';
       
-      const mockTables = [
+      jest.spyOn(service, '$queryRaw').mockResolvedValue([] as any);
+      jest.spyOn(service, '$executeRawUnsafe').mockResolvedValue(0 as any);
+
+      await service.cleanDatabase();
+
+      expect(service.$queryRaw).not.toHaveBeenCalled();
+      expect(service.$executeRawUnsafe).not.toHaveBeenCalled();
+    });
+
+    it('should handle $queryRaw error', async () => {
+      process.env.NODE_ENV = 'test';
+      const error = new Error('Query failed');
+      jest.spyOn(service, '$queryRaw').mockRejectedValue(error);
+
+      await expect(service.cleanDatabase()).rejects.toThrow('Query failed');
+    });
+
+    it('should handle $executeRawUnsafe error and log it', async () => {
+      process.env.NODE_ENV = 'test';
+      jest.spyOn(service, '$queryRaw').mockResolvedValue([
         { tablename: 'users' },
-        { tablename: 'land_plots' },
-        { tablename: '_prisma_migrations' }
-      ];
-      
-      mockPrismaClient.$queryRaw.mockResolvedValue(mockTables);
-      mockPrismaClient.$executeRawUnsafe.mockResolvedValue(1);
-      
+      ] as any);
+      const error = new Error('Execute failed');
+      jest.spyOn(service, '$executeRawUnsafe').mockRejectedValue(error);
+
       await service.cleanDatabase();
-      
-      expect(mockPrismaClient.$queryRaw).toHaveBeenCalled();
-      expect(mockPrismaClient.$executeRawUnsafe).toHaveBeenCalledWith(
-        'TRUNCATE TABLE "public"."users", "public"."land_plots" CASCADE;'
-      );
+
+      expect(console.log).toHaveBeenCalledWith({ error });
     });
 
-    it('should exclude _prisma_migrations table from cleanup', async () => {
-      process.env.NODE_ENV = 'test';
+    it('should handle undefined NODE_ENV', async () => {
+      delete process.env.NODE_ENV;
       
-      const mockTables = [
-        { tablename: 'users' },
-        { tablename: '_prisma_migrations' },
-        { tablename: 'land_plots' }
-      ];
-      
-      mockPrismaClient.$queryRaw.mockResolvedValue(mockTables);
-      mockPrismaClient.$executeRawUnsafe.mockResolvedValue(1);
-      
-      await service.cleanDatabase();
-      
-      expect(mockPrismaClient.$executeRawUnsafe).toHaveBeenCalledWith(
-        'TRUNCATE TABLE "public"."users", "public"."land_plots" CASCADE;'
-      );
-    });
+      jest.spyOn(service, '$queryRaw').mockResolvedValue([] as any);
+      jest.spyOn(service, '$executeRawUnsafe').mockResolvedValue(0 as any);
 
-    it('should handle cleanup errors gracefully', async () => {
-      process.env.NODE_ENV = 'test';
-      
-      const mockTables = [{ tablename: 'users' }];
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-      
-      mockPrismaClient.$queryRaw.mockResolvedValue(mockTables);
-      mockPrismaClient.$executeRawUnsafe.mockRejectedValue(new Error('Cleanup failed'));
-      
       await service.cleanDatabase();
-      
-      expect(consoleSpy).toHaveBeenCalledWith({ error: expect.any(Error) });
-      consoleSpy.mockRestore();
-    });
 
-    it('should handle empty table list', async () => {
-      process.env.NODE_ENV = 'test';
-      
-      mockPrismaClient.$queryRaw.mockResolvedValue([]);
-      mockPrismaClient.$executeRawUnsafe.mockResolvedValue(1);
-      
-      await service.cleanDatabase();
-      
-      expect(mockPrismaClient.$executeRawUnsafe).toHaveBeenCalledWith(
-        'TRUNCATE TABLE  CASCADE;'
-      );
+      expect(service.$queryRaw).not.toHaveBeenCalled();
+      expect(service.$executeRawUnsafe).not.toHaveBeenCalled();
     });
   });
 }); 

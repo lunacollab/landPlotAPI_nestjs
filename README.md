@@ -237,7 +237,6 @@ coverage/lcov-report/index.html
 ```
 
 
-
 ### Manual Deployment
 ```bash
 # Build
