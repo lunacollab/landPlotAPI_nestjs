@@ -9,24 +9,23 @@ describe('ZonesService', () => {
   let service: ZonesService;
   let prisma: PrismaService;
 
-  const mockPrismaService = {
-    zone: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-      count: jest.fn(),
-    },
-  };
-
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ZonesService,
         {
           provide: PrismaService,
-          useValue: mockPrismaService,
+          useValue: {
+            zone: {
+              create: jest.fn(),
+              findMany: jest.fn(),
+              findUnique: jest.fn(),
+              findFirst: jest.fn(),
+              update: jest.fn(),
+              delete: jest.fn(),
+              count: jest.fn(),
+            },
+          },
         },
       ],
     }).compile();
@@ -47,76 +46,101 @@ describe('ZonesService', () => {
     it('should create a new zone', async () => {
       const createZoneDto: CreateZoneDto = {
         name: 'Test Zone',
-        description: 'Test Description',
-        color: '#FF0000',
-        coordinates: [{ lat: 10, lng: 20 }],
+        color: '#FF5733',
+        address: 'Test Address',
+        coordinates: { lat: 10.762622, lng: 106.660172 },
       };
 
-      const mockZone: Zone = {
+      const mockZone = {
         id: 'zone-1',
         name: 'Test Zone',
-        description: 'Test Description',
-        color: '#FF0000',
-        coordinates: [{ lat: 10, lng: 20 }] as any,
+        color: '#FF5733',
+        address: 'Test Address',
+        coordinates: { lat: 10.762622, lng: 106.660172 },
         createdAt: new Date(),
         updatedAt: new Date(),
+        _count: {
+          landPlots: 0,
+        },
       };
 
+      jest.spyOn(prisma.zone, 'findFirst').mockResolvedValue(null);
       jest.spyOn(prisma.zone, 'create').mockResolvedValue(mockZone);
 
       const result = await service.create(createZoneDto);
 
+      expect(prisma.zone.findFirst).toHaveBeenCalledWith({
+        where: { name: createZoneDto.name },
+      });
       expect(prisma.zone.create).toHaveBeenCalledWith({
         data: createZoneDto,
+        include: {
+          _count: {
+            select: {
+              landPlots: true,
+            },
+          },
+        },
       });
       expect(result).toEqual(mockZone);
     });
   });
 
   describe('findAll', () => {
-    it('should return all zones', async () => {
-      const mockZones: Zone[] = [
+    it('should return paginated zones', async () => {
+      const mockZones = [
         {
           id: 'zone-1',
-          name: 'Zone 1',
-          description: 'Description 1',
-          color: '#FF0000',
-          coordinates: [{ lat: 10, lng: 20 }] as any,
+          name: 'Zone A',
+          color: '#FF5733',
+          address: 'Address 1',
+          coordinates: { lat: 10.762622, lng: 106.660172 },
           createdAt: new Date(),
           updatedAt: new Date(),
+          _count: {
+            landPlots: 2,
+          },
         },
         {
           id: 'zone-2',
-          name: 'Zone 2',
-          description: 'Description 2',
-          color: '#00FF00',
-          coordinates: [{ lat: 30, lng: 40 }] as any,
+          name: 'Zone B',
+          color: '#33FF57',
+          address: 'Address 2',
+          coordinates: { lat: 10.762622, lng: 106.660172 },
           createdAt: new Date(),
           updatedAt: new Date(),
+          _count: {
+            landPlots: 1,
+          },
         },
       ];
 
       jest.spyOn(prisma.zone, 'findMany').mockResolvedValue(mockZones);
       jest.spyOn(prisma.zone, 'count').mockResolvedValue(2);
 
-      const result = await service.findAll({});
+      const result = await service.findAll({ page: 1, limit: 10 });
 
       expect(prisma.zone.findMany).toHaveBeenCalled();
+      expect(prisma.zone.count).toHaveBeenCalled();
+      expect(result.meta.total).toBe(2);
       expect(result.data).toEqual(mockZones);
-      expect(result.total).toBe(2);
     });
   });
 
   describe('findOne', () => {
     it('should return a zone by id', async () => {
-      const mockZone: Zone = {
+      const mockZone = {
         id: 'zone-1',
         name: 'Test Zone',
-        description: 'Test Description',
-        color: '#FF0000',
-        coordinates: [{ lat: 10, lng: 20 }] as any,
+        color: '#FF5733',
+        address: 'Test Address',
+        coordinates: { lat: 10.762622, lng: 106.660172 },
         createdAt: new Date(),
         updatedAt: new Date(),
+        landPlots: [],
+        _count: {
+          landPlots: 0,
+        },
       };
 
       jest.spyOn(prisma.zone, 'findUnique').mockResolvedValue(mockZone);
@@ -125,6 +149,27 @@ describe('ZonesService', () => {
 
       expect(prisma.zone.findUnique).toHaveBeenCalledWith({
         where: { id: 'zone-1' },
+        include: {
+          landPlots: {
+            include: {
+              crops: {
+                include: {
+                  crop: true,
+                },
+              },
+              services: {
+                include: {
+                  service: true,
+                },
+              },
+            },
+          },
+          _count: {
+            select: {
+              landPlots: true,
+            },
+          },
+        },
       });
       expect(result).toEqual(mockZone);
     });
@@ -134,19 +179,36 @@ describe('ZonesService', () => {
     it('should update a zone', async () => {
       const updateZoneDto: UpdateZoneDto = {
         name: 'Updated Zone',
-        description: 'Updated Description',
+        color: '#33FF57',
+        address: 'Updated Address',
+        coordinates: { lat: 10.762622, lng: 106.660172 },
       };
 
-      const mockZone: Zone = {
+      const existingZone = {
         id: 'zone-1',
-        name: 'Updated Zone',
-        description: 'Updated Description',
-        color: '#FF0000',
-        coordinates: [{ lat: 10, lng: 20 }] as any,
+        name: 'Test Zone',
+        color: '#FF5733',
+        address: 'Test Address',
+        coordinates: { lat: 10.762622, lng: 106.660172 },
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
+      const mockZone = {
+        id: 'zone-1',
+        name: 'Updated Zone',
+        color: '#33FF57',
+        address: 'Updated Address',
+        coordinates: { lat: 10.762622, lng: 106.660172 },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        _count: {
+          landPlots: 0,
+        },
+      };
+
+      jest.spyOn(prisma.zone, 'findUnique').mockResolvedValue(existingZone);
+      jest.spyOn(prisma.zone, 'findFirst').mockResolvedValue(null);
       jest.spyOn(prisma.zone, 'update').mockResolvedValue(mockZone);
 
       const result = await service.update('zone-1', updateZoneDto);
@@ -154,6 +216,13 @@ describe('ZonesService', () => {
       expect(prisma.zone.update).toHaveBeenCalledWith({
         where: { id: 'zone-1' },
         data: updateZoneDto,
+        include: {
+          _count: {
+            select: {
+              landPlots: true,
+            },
+          },
+        },
       });
       expect(result).toEqual(mockZone);
     });
@@ -161,16 +230,30 @@ describe('ZonesService', () => {
 
   describe('remove', () => {
     it('should delete a zone', async () => {
-      const mockZone: Zone = {
+      const existingZone = {
         id: 'zone-1',
         name: 'Test Zone',
-        description: 'Test Description',
-        color: '#FF0000',
-        coordinates: [{ lat: 10, lng: 20 }] as any,
+        color: '#FF5733',
+        address: 'Test Address',
+        coordinates: { lat: 10.762622, lng: 106.660172 },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        _count: {
+          landPlots: 0,
+        },
+      };
+
+      const mockZone = {
+        id: 'zone-1',
+        name: 'Test Zone',
+        color: '#FF5733',
+        address: 'Test Address',
+        coordinates: { lat: 10.762622, lng: 106.660172 },
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
+      jest.spyOn(prisma.zone, 'findUnique').mockResolvedValue(existingZone);
       jest.spyOn(prisma.zone, 'delete').mockResolvedValue(mockZone);
 
       const result = await service.remove('zone-1');

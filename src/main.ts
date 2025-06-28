@@ -8,10 +8,8 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Global prefix
   app.setGlobalPrefix('api/v1');
 
-  // Global pipes
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -23,19 +21,17 @@ async function bootstrap() {
     }),
   );
 
-  // Global filters
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // Global interceptors
+
   app.useGlobalInterceptors(new TransformInterceptor());
 
-  // CORS
+
   app.enableCors({
     origin: true,
     credentials: true,
   });
 
-  // Swagger documentation
   const config = new DocumentBuilder()
     .setTitle('Farm Management System API')
     .setDescription('API documentation for Farm Management System')
@@ -49,8 +45,8 @@ async function bootstrap() {
   const port = process.env.PORT || 3000;
   await app.listen(port);
   
-  console.log(`🚀 Application is running on: http://localhost:${port}`);
-  console.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
+  console.log(`Application is running on: http://localhost:${port}`);
+  console.log(`API Documentation: http://localhost:${port}/api/docs`);
 }
 
 bootstrap();

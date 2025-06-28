@@ -35,13 +35,13 @@ export class ValidationException extends CustomException {
 }
 
 export class UnauthorizedException extends CustomException {
-  constructor(message: string = 'Unauthorized access') {
+  constructor(message: string = 'Unauthorized') {
     super(message, HttpStatus.UNAUTHORIZED, 'UNAUTHORIZED');
   }
 }
 
 export class ForbiddenException extends CustomException {
-  constructor(message: string = 'Access forbidden') {
+  constructor(message: string = 'Forbidden') {
     super(message, HttpStatus.FORBIDDEN, 'FORBIDDEN');
   }
 }
